@@ -1,0 +1,7 @@
+* Go + Templ + Htmx + Gin + Sqlc
+
+* TODOs:
+- better prediction
+- team budgets to prediction
+- postgresql/mysql 
+- publish on github.io
