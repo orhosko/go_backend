@@ -1,0 +1,174 @@
+package templates
+
+import (
+	"fmt"
+	"github.com/orhosko/go-backend/sqlc"
+)
+
+// TeamDetailData holds all the data needed for a team's detailed view
+type TeamDetailData struct {
+	Team     sqlc.Team
+	Standing sqlc.Standing
+	Stats    TeamStats
+}
+
+// TeamStats holds additional statistics for a team
+type TeamStats struct {
+	TotalMatches int
+	GoalsScored  int64
+	GoalsConceded int64
+	WinPercentage float64
+	DrawPercentage float64
+	LossPercentage float64
+}
+
+// TeamsPageData holds all the data needed for the teams page
+type TeamsPageData struct {
+	Teams []TeamDetailData
+	CurrentSeason sqlc.Season
+}
+
+// Teams is the main template for displaying team information
+templ Teams(data TeamsPageData) {
+	@Layout(PageMeta{Title: "Team Information", Description: "Detailed information about all teams in the league"}) {
+		<div class="page-header">
+			<h1>Team Information - Season { fmt.Sprintf("%d", data.CurrentSeason.Year) }</h1>
+		</div>
+		<div class="teams-grid">
+			for _, teamData := range data.Teams {
+				<div class="team-card">
+					<div class="team-header">
+						<h2>{ teamData.Team.Name }</h2>
+						<span class="team-budget">Budget: €{ fmt.Sprintf("%.1fM", float64(teamData.Team.Budget.Int64)/1000000) }</span>
+					</div>
+					<div class="team-stats">
+						<div class="stat-row">
+							<div class="stat-item">
+								<span class="stat-label">Points</span>
+								<span class="stat-value">{ fmt.Sprintf("%d", teamData.Standing.Points.Int64) }</span>
+							</div>
+							<div class="stat-item">
+								<span class="stat-label">Matches</span>
+								<span class="stat-value">{ fmt.Sprintf("%d", teamData.Stats.TotalMatches) }</span>
+							</div>
+							<div class="stat-item">
+								<span class="stat-label">Goals For</span>
+								<span class="stat-value">{ fmt.Sprintf("%d", teamData.Stats.GoalsScored) }</span>
+							</div>
+						</div>
+						<div class="stat-row">
+							<div class="stat-item">
+								<span class="stat-label">Wins</span>
+								<span class="stat-value">{ fmt.Sprintf("%d", teamData.Standing.Wins.Int64) }</span>
+							</div>
+							<div class="stat-item">
+								<span class="stat-label">Draws</span>
+								<span class="stat-value">{ fmt.Sprintf("%d", teamData.Standing.Draws.Int64) }</span>
+							</div>
+							<div class="stat-item">
+								<span class="stat-label">Losses</span>
+								<span class="stat-value">{ fmt.Sprintf("%d", teamData.Standing.Losses.Int64) }</span>
+							</div>
+						</div>
+						<div class="stat-row">
+							<div class="stat-item">
+								<span class="stat-label">Goals Against</span>
+								<span class="stat-value">{ fmt.Sprintf("%d", teamData.Stats.GoalsConceded) }</span>
+							</div>
+							<div class="stat-item">
+								<span class="stat-label">Goal Diff</span>
+								<span class="stat-value">{ fmt.Sprintf("%d", teamData.Standing.GoalDiff.Int64) }</span>
+							</div>
+						</div>
+					</div>
+				</div>
+			}
+		</div>
+
+		<style>
+			.teams-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+				gap: 20px;
+				margin-top: 20px;
+			}
+
+			.team-card {
+				background-color: var(--card-background);
+				border-radius: 8px;
+				overflow: hidden;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+			}
+
+			.team-header {
+				background-color: var(--primary-color);
+				color: white;
+				padding: 15px;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+			}
+
+			.team-header h2 {
+				margin: 0;
+				font-size: 1.2rem;
+				font-weight: 600;
+			}
+
+			.team-budget {
+				background-color: rgba(255, 255, 255, 0.2);
+				padding: 4px 8px;
+				border-radius: 4px;
+				font-size: 0.9rem;
+			}
+
+			.team-stats {
+				padding: 15px;
+			}
+
+			.stat-row {
+				display: grid;
+				grid-template-columns: repeat(3, 1fr);
+				gap: 10px;
+				margin-bottom: 15px;
+			}
+
+			.stat-row:last-child {
+				margin-bottom: 0;
+			}
+
+			.stat-item {
+				text-align: center;
+			}
+
+			.stat-label {
+				display: block;
+				font-size: 0.8rem;
+				color: var(--text-color);
+				opacity: 0.8;
+				margin-bottom: 4px;
+			}
+
+			.stat-value {
+				display: block;
+				font-size: 1.1rem;
+				font-weight: 600;
+				color: var(--secondary-color);
+			}
+
+			@media (max-width: 768px) {
+				.teams-grid {
+					grid-template-columns: 1fr;
+				}
+
+				.stat-row {
+					gap: 5px;
+				}
+
+				.stat-value {
+					font-size: 1rem;
+				}
+			}
+		</style>
+	}
+} 

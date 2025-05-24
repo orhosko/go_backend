@@ -60,20 +60,35 @@ templ TeamTable(teams []sqlc.Team) {
 	</table>
 }
 
+// TeamStanding combines a team with its standing
+type TeamStanding struct {
+	Team     sqlc.Team
+	Standing sqlc.Standing
+}
+
+// MatchFixture is a simplified struct for displaying upcoming fixtures
+type MatchFixture struct {
+	HomeTeamName  string
+	GuestTeamName string
+}
+
 // StandingsPageData holds all the data needed for the standings page.
 type StandingsPageData struct {
-	CurrentWeek           int
-	LeagueTable           []sqlc.Teamstanding
-	MatchResults          []MatchDisplay
+	CurrentWeek             int
+	CurrentYear            int
+	LeagueTable            []TeamStanding
+	MatchResults           []MatchDisplay
 	ChampionshipPredictions []TeamPrediction
+	Fixtures               []MatchFixture
+	IsSeasonComplete       bool
 }
 
 // MatchDisplay is a simplified struct for displaying match results.
 type MatchDisplay struct {
 	HomeTeamName  string
 	GuestTeamName string
-	HomeScore     int32
-	GuestScore    int32
+	HomeScore     int64
+	GuestScore    int64
 }
 
 // TeamPrediction represents a team's championship prediction percentage.
@@ -84,95 +99,171 @@ type TeamPrediction struct {
 
 // Standings is the main template for displaying the league standings.
 templ Standings(data StandingsPageData) {
-	@Layout(PageMeta{Title: fmt.Sprintf("League Standings - Week %d", data.CurrentWeek), Description: "Current football league standings and match results"}) {
-		<h1>Football League Simulation</h1>
-
-		<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
-			<div style="flex: 2;">
-				<h2>League Table - Week { fmt.Sprintf("%d", data.CurrentWeek) }</h2>
-				@LeagueTable(data.LeagueTable)
-			</div>
-			<div style="flex: 1;">
-				<div class="match-results">
-					<h3>{ fmt.Sprintf("%d", data.CurrentWeek) }th Week Match Result</h3>
-					@MatchResults(data.MatchResults)
-				</div>
-				<div class="prediction-box">
-					<h3>{ fmt.Sprintf("%d", data.CurrentWeek) } Week Predictions of Championship</h3>
-					@ChampionshipPredictions(data.ChampionshipPredictions)
-				</div>
+	@Layout(PageMeta{Title: fmt.Sprintf("League Standings - Week %d, Season %d", data.CurrentWeek, data.CurrentYear), Description: "Current football league standings and match results"}) {
+		<div class="page-header">
+			<h1>League Table - Week { fmt.Sprintf("%d", data.CurrentWeek) }, Season { fmt.Sprintf("%d", data.CurrentYear) }</h1>
+			<div class="season-controls">
+				<form method="POST" action="/reset-to-2025" class="control-form">
+					<button type="submit" class="btn btn-warning">Reset to 2025</button>
+				</form>
+				if data.IsSeasonComplete {
+					<form method="POST" action="/start-new-season" class="control-form">
+						<button type="submit" class="btn btn-success">Start New Season</button>
+					</form>
+				}
 			</div>
 		</div>
 
-		<div class="button-group">
-			<form action="/play-all" method="post">
-				<button type="submit" class="button">Play All</button>
-			</form>
-			<form action="/next-week" method="post">
-				<button type="submit" class="button">Next Week</button>
-			</form>
+		<div class="main-content">
+			<div class="left-section">
+				<div class="league-section">
+					@LeagueTable(data.LeagueTable)
+				</div>
+				<div class="fixtures">
+					<h3>Upcoming Fixtures</h3>
+					@Fixtures(data.Fixtures)
+					if !data.IsSeasonComplete {
+						<div class="controls">
+							<form method="POST" action="/play-week" class="control-form">
+								if len(data.Fixtures) == 0 {
+									<button type="submit" class="btn btn-primary" disabled>Simulate Week { fmt.Sprintf("%d", data.CurrentWeek) }</button>
+								} else {
+									<button type="submit" class="btn btn-primary">Simulate Week { fmt.Sprintf("%d", data.CurrentWeek) }</button>
+								}
+							</form>
+							<form method="POST" action="/next-week" class="control-form">
+								if len(data.Fixtures) > len(data.MatchResults) {
+									<button type="submit" class="btn btn-secondary" disabled>Next Week</button>
+								} else {
+									<button type="submit" class="btn btn-secondary">Next Week</button>
+								}
+							</form>
+							<form method="POST" action="/play-all" class="control-form">
+								if len(data.Fixtures) == 0 {
+									<button type="submit" class="btn btn-success" disabled>Play All Remaining Matches</button>
+								} else {
+									<button type="submit" class="btn btn-success">Play All Remaining Matches</button>
+								}
+							</form>
+						</div>
+					}
+				</div>
+			</div>
+			<div class="sidebar-section">
+				<div class="match-results">
+					<h3>{ fmt.Sprintf("%d", data.CurrentWeek) }th Week Match Results</h3>
+					@MatchResults(data.MatchResults)
+				</div>
+				<div class="predictions">
+					<h3>Championship Predictions</h3>
+					@ChampionshipPredictions(data.ChampionshipPredictions)
+				</div>
+			</div>
 		</div>
 	}
 }
 
 // LeagueTable displays the league table.
-templ LeagueTable(standings []sqlc.Teamstanding) {
-	<table>
-		<thead>
-			<tr>
-				<th>#</th>
-				<th>Team</th>
-				<th>PTS</th>
-				<th>P</th>
-				<th>W</th>
-				<th>D</th>
-				<th>L</th>
-				<th>GD</th>
-			</tr>
-		</thead>
-		<tbody>
-			for i, ts := range standings {
+templ LeagueTable(standings []TeamStanding) {
+	<div class="league-table-container">
+		<table class="league-table">
+			<thead>
 				<tr>
-					<td>{ fmt.Sprintf("%d", i+1) }</td> // Rank
-					<td>{ ts.Team.Name }</td>
-					<td>{ fmt.Sprintf("%d", ts.Standing.Points) }</td>
-					<td>{ fmt.Sprintf("%d", ts.Standing.Wins) }</td>
-					<td>{ fmt.Sprintf("%d", ts.Standing.Draws) }</td>
-					<td>{ fmt.Sprintf("%d", ts.Standing.Losses) }</td>
-					<td>{ fmt.Sprintf("%d", ts.Standing.GoalDiff) }</td>
+					<th class="position">#</th>
+					<th class="team-name">Team</th>
+					<th class="points">PTS</th>
+					<th>P</th>
+					<th>W</th>
+					<th>D</th>
+					<th>L</th>
+					<th>GD</th>
 				</tr>
-			}
-		</tbody>
-	</table>
+			</thead>
+			<tbody>
+				for i, ts := range standings {
+					<tr>
+						<td class="position">{ fmt.Sprintf("%d", i+1) }</td>
+						<td class="team-name">{ ts.Team.Name }</td>
+						<td class="points">{ fmt.Sprintf("%d", ts.Standing.Points.Int64) }</td>
+						<td>{ fmt.Sprintf("%d", ts.Standing.Wins.Int64 + ts.Standing.Draws.Int64 + ts.Standing.Losses.Int64) }</td>
+						<td>{ fmt.Sprintf("%d", ts.Standing.Wins.Int64) }</td>
+						<td>{ fmt.Sprintf("%d", ts.Standing.Draws.Int64) }</td>
+						<td>{ fmt.Sprintf("%d", ts.Standing.Losses.Int64) }</td>
+						<td class={ getGoalDiffClass(ts.Standing.GoalDiff.Int64) }>{ fmt.Sprintf("%d", ts.Standing.GoalDiff.Int64) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
 }
 
 // MatchResults displays the results of the current week's matches.
 templ MatchResults(matches []MatchDisplay) {
-	<ul>
+	<div class="match-results-container">
 		if len(matches) == 0 {
-			<li>No matches played this week.</li>
+			<div class="no-matches">No matches played this week.</div>
 		} else {
 			for _, match := range matches {
-				<li>{ match.HomeTeamName } { fmt.Sprintf("%d", match.HomeScore) } - { fmt.Sprintf("%d", match.GuestScore) } { match.GuestTeamName }</li>
+				<div class="match-card">
+					<div class="team home">
+						<span class="team-name">{ match.HomeTeamName }</span>
+						<span class="score">{ fmt.Sprintf("%d", match.HomeScore) }</span>
+					</div>
+					<div class="match-separator">
+						<span>-</span>
+					</div>
+					<div class="team away">
+						<span class="score">{ fmt.Sprintf("%d", match.GuestScore) }</span>
+						<span class="team-name">{ match.GuestTeamName }</span>
+					</div>
+				</div>
 			}
 		}
-	</ul>
+	</div>
 }
 
 // ChampionshipPredictions displays the predictions for championship.
 templ ChampionshipPredictions(predictions []TeamPrediction) {
-	<ul class="prediction-list">
+	<div class="predictions-container">
 		if len(predictions) == 0 {
-			<li>No predictions available.</li>
+			<div class="no-predictions">No predictions available.</div>
 		} else {
 			for _, pred := range predictions {
-				<li>
-					<span>{ pred.TeamName }</span>
-					<span>{ fmt.Sprintf("%.2f%%", pred.Probability*100) }</span>
-				</li>
+				<div class="prediction-card">
+					<div class="team-info">
+						<span class="team-name">{ pred.TeamName }</span>
+						<div class="probability-bar">
+							<div class="probability-fill" style={ fmt.Sprintf("width: %.1f%%", pred.Probability*100) }></div>
+						</div>
+					</div>
+					<span class="probability-value">{ fmt.Sprintf("%.1f%%", pred.Probability*100) }</span>
+				</div>
 			}
 		}
-	</ul>
+	</div>
+}
+
+// Fixtures displays the upcoming matches
+templ Fixtures(fixtures []MatchFixture) {
+	<div class="fixtures-container">
+		if len(fixtures) == 0 {
+			<div class="no-fixtures">No upcoming fixtures.</div>
+		} else {
+			for _, fixture := range fixtures {
+				<div class="fixture-card">
+					<div class="team home">
+						<span class="team-name">{ fixture.HomeTeamName }</span>
+					</div>
+					<div class="fixture-separator">
+						<span>-</span>
+					</div>
+					<div class="team away">
+						<span class="team-name">{ fixture.GuestTeamName }</span>
+					</div>
+				</div>
+			}
+		}
+	</div>
 }
 
 // PageMeta defines common metadata for a page.
@@ -190,126 +281,458 @@ templ Layout(meta PageMeta) {
 		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 		<title>{ meta.Title }</title>
 		<meta name="description" content={ meta.Description }/>
-		// You can link your CSS here
+		<script src="https://unpkg.com/htmx.org@1.9.10" integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC" crossorigin="anonymous"></script>
 		<style>
+			/* Base styles */
+			:root {
+				--primary-color: #4CAF50;
+				--primary-dark: #45a049;
+				--secondary-color: #2c3e50;
+				--background-color: #f4f7f6;
+				--card-background: #ffffff;
+				--text-color: #333;
+				--border-color: #ddd;
+				--success-color: #28a745;
+				--warning-color: #ffc107;
+				--danger-color: #dc3545;
+				--info-color: #17a2b8;
+			}
+
 			body {
-				font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
 				margin: 0;
 				padding: 20px;
-				background-color: #f4f7f6;
-				color: #333;
+				background-color: var(--background-color);
+				color: var(--text-color);
+				line-height: 1.6;
 			}
+
 			.container {
-				max-width: 960px;
+				max-width: 1200px;
 				margin: 20px auto;
-				background-color: #ffffff;
+				background-color: var(--card-background);
 				padding: 30px;
-				border-radius: 8px;
-				box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+				border-radius: 12px;
+				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 			}
-			h1, h2 {
-				color: #2c3e50;
-				text-align: center;
-				margin-bottom: 25px;
-			}
-			table {
-				width: 100%;
-				border-collapse: collapse;
-				margin-top: 20px;
-				box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-			}
-			th, td {
-				padding: 12px 15px;
-				text-align: left;
-				border-bottom: 1px solid #ddd;
-			}
-			th {
-				background-color: #4CAF50;
-				color: white;
-				text-transform: uppercase;
-				font-size: 0.9em;
-				letter-spacing: 0.05em;
-			}
-			tr:nth-child(even) {
-				background-color: #f9f9f9;
-			}
-			tr:hover {
-				background-color: #f1f1f1;
-			}
-			.button-group {
-				display: flex;
-				justify-content: center;
-				gap: 15px;
-				margin-top: 30px;
-			}
-			.button {
-				background-color: #007bff;
-				color: white;
-				padding: 10px 20px;
-				border: none;
-				border-radius: 5px;
-				cursor: pointer;
-				font-size: 1em;
-				text-decoration: none;
-				transition: background-color 0.3s ease;
-			}
-			.button:hover {
-				background-color: #0056b3;
-			}
-			.prediction-box {
-				background-color: #e9ecef;
-				padding: 20px;
-				border-radius: 8px;
-				margin-top: 30px;
-				box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
-			}
-			.prediction-box h3 {
-				text-align: center;
-				color: #34495e;
-				margin-bottom: 15px;
-			}
-			.prediction-list {
-				list-style: none;
-				padding: 0;
-				margin: 0;
-			}
-			.prediction-list li {
+
+			/* Page Header */
+			.page-header {
 				display: flex;
 				justify-content: space-between;
-				padding: 8px 0;
-				border-bottom: 1px dashed #ced4da;
+				align-items: center;
+				margin-bottom: 30px;
 			}
-			.prediction-list li:last-child {
-				border-bottom: none;
+
+			.page-header h1 {
+				margin: 0;
+				font-size: 1.5rem;
+				color: var(--secondary-color);
 			}
-			.match-results {
-				margin-top: 30px;
-				background-color: #d1ecf1;
-				padding: 20px;
+
+			/* League Table Styles */
+			.league-table-container {
+				background-color: var(--card-background);
 				border-radius: 8px;
-				box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+				overflow: hidden;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 			}
-			.match-results h3 {
+
+			.league-table {
+				width: 100%;
+				border-collapse: collapse;
+				margin: 0;
+			}
+
+			.league-table th {
+				background-color: var(--primary-color);
+				color: white;
+				font-weight: 600;
+				text-transform: uppercase;
+				font-size: 0.85rem;
+				padding: 12px;
 				text-align: center;
-				color: #0c5460;
-				margin-bottom: 15px;
 			}
-			.match-results ul {
-				list-style: none;
-				padding: 0;
+
+			.league-table td {
+				padding: 12px;
+				text-align: center;
+				border-bottom: 1px solid var(--border-color);
 			}
-			.match-results li {
-				padding: 8px 0;
+
+			.league-table .team-name {
+				text-align: left;
+				font-weight: 500;
+			}
+
+			.league-table .position {
 				font-weight: bold;
-				color: #0f6674;
+				width: 40px;
+			}
+
+			.league-table .points {
+				font-weight: bold;
+				color: var(--secondary-color);
+			}
+
+			.positive { color: var(--success-color); }
+			.negative { color: var(--danger-color); }
+
+			/* Match Results Styles */
+			.match-results-container {
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+				min-height: 200px; /* Fixed minimum height */
+				margin-bottom: 20px;
+			}
+
+			.match-card {
+				background-color: var(--card-background);
+				border-radius: 8px;
+				padding: 15px;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+				height: 50px; /* Fixed height for match cards */
+			}
+
+			.match-card .team {
+				flex: 1;
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				min-width: 120px; /* Minimum width for team names */
+			}
+
+			.match-card .team-name {
+				flex: 1;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			.match-separator {
+				padding: 0 15px;
+				color: var(--text-color);
+				font-weight: 500;
+			}
+
+			/* Predictions Styles */
+			.predictions-container {
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+				min-height: 200px; /* Fixed minimum height */
+				margin-bottom: 20px;
+			}
+
+			.prediction-card {
+				background-color: var(--card-background);
+				border-radius: 8px;
+				padding: 15px;
+				display: flex;
+				align-items: center;
+				gap: 15px;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+			}
+
+			.prediction-card .team-name {
+				flex: 1;
+				font-weight: 500;
+			}
+
+			.probability-bar {
+				width: 120px;
+				height: 8px;
+				background-color: #e9ecef;
+				border-radius: 4px;
+				overflow: hidden;
+			}
+
+			.probability-fill {
+				height: 100%;
+				background-color: var(--primary-color);
+				border-radius: 4px;
+				transition: width 0.3s ease;
+			}
+
+			.probability-value {
+				min-width: 60px;
+				text-align: left;
+				font-weight: 500;
+				color: var(--secondary-color);
+			}
+
+			/* Fixtures Styles */
+			.fixtures-container {
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+				min-height: 200px; /* Fixed minimum height */
+			}
+
+			.fixture-card {
+				background-color: var(--card-background);
+				border-radius: 8px;
+				padding: 15px;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+				height: 50px; /* Fixed height for fixture cards */
+			}
+
+			.fixture-card .team {
+				flex: 1;
 				text-align: center;
+				min-width: 120px; /* Minimum width for team names */
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			.fixture-separator {
+				padding: 0 15px;
+				color: var(--text-color);
+				font-weight: 500;
+			}
+
+			/* Button Styles */
+			.btn {
+				display: inline-block;
+				padding: 10px 20px;
+				border-radius: 6px;
+				font-weight: 500;
+				text-align: center;
+				text-decoration: none;
+				border: none;
+				cursor: pointer;
+				transition: all 0.2s ease;
+			}
+
+			.btn-primary {
+				background-color: var(--primary-color);
+				color: white;
+			}
+
+			.btn-secondary {
+				background-color: var(--secondary-color);
+				color: white;
+			}
+
+			.btn-warning {
+				background-color: var(--warning-color);
+				color: var(--text-color);
+			}
+
+			.btn-success {
+				background-color: var(--success-color);
+				color: white;
+			}
+
+			.btn:hover {
+				transform: translateY(-1px);
+				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+			}
+
+			.btn[disabled] {
+				opacity: 0.6;
+				cursor: not-allowed;
+				pointer-events: none;
+			}
+
+			/* Navigation Styles */
+			.navigation {
+				display: flex;
+				justify-content: flex-end;
+				margin-bottom: 20px;
+				padding-bottom: 15px;
+				border-bottom: 1px solid var(--border-color);
+				gap: 10px;
+			}
+
+			.nav-button {
+				display: inline-block;
+				padding: 8px 16px;
+				background-color: var(--primary-color);
+				color: white;
+				text-decoration: none;
+				border-radius: 6px;
+				font-weight: 500;
+				transition: all 0.2s ease;
+			}
+
+			.nav-button:hover {
+				background-color: var(--primary-dark);
+				transform: translateY(-1px);
+			}
+
+			/* Season Controls */
+			.season-controls {
+				display: flex;
+				gap: 10px;
+			}
+
+			.control-form {
+				margin: 0;
+			}
+
+			/* Updated Main Content Layout */
+			.main-content {
+				display: flex;
+				justify-content: space-between;
+				align-items: flex-start;
+				gap: 30px;
+			}
+
+			.left-section {
+				flex: 2;
+				min-width: 0; /* Allow flex item to shrink below content size */
+				display: flex;
+				flex-direction: column;
+				gap: 20px;
+			}
+
+			.league-section {
+				width: 100%;
+			}
+
+			.fixtures {
+				background-color: var(--card-background);
+				border-radius: 8px;
+				padding: 15px;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+			}
+
+			.sidebar-section {
+				flex: 1;
+				min-width: 300px;
+				max-width: 400px;
+			}
+
+			.sidebar-section h3 {
+				margin: 0 0 15px 0;
+				font-size: 1.1rem;
+				color: var(--secondary-color);
+				padding-bottom: 10px;
+				border-bottom: 1px solid var(--border-color);
+			}
+
+			.controls {
+				margin-top: 20px;
+				padding-top: 15px;
+				border-top: 1px solid var(--border-color);
+				display: flex;
+				gap: 10px;
+				justify-content: flex-end;
+			}
+
+			/* Section Headers */
+			.sidebar-section > div {
+				background-color: var(--card-background);
+				border-radius: 8px;
+				padding: 15px;
+				margin-bottom: 20px;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+			}
+
+			.no-matches,
+			.no-predictions,
+			.no-fixtures {
+				text-align: center;
+				padding: 20px;
+				color: var(--text-color);
+				opacity: 0.7;
+				font-style: italic;
+			}
+
+			/* Responsive Design Updates */
+			@media (max-width: 768px) {
+				.container {
+					padding: 15px;
+				}
+
+				.page-header {
+					flex-direction: column;
+					gap: 15px;
+					text-align: center;
+				}
+
+				.season-controls {
+					justify-content: center;
+				}
+
+				.main-content {
+					flex-direction: column;
+				}
+
+				.left-section,
+				.sidebar-section {
+					width: 100%;
+					max-width: none;
+				}
+
+				.league-table th,
+				.league-table td {
+					padding: 8px;
+					font-size: 0.9rem;
+				}
+
+				.match-card,
+				.prediction-card,
+				.fixture-card {
+					flex-direction: column;
+					text-align: center;
+					gap: 10px;
+				}
+
+				.match-card .team {
+					justify-content: center;
+				}
+
+				.probability-bar {
+					width: 100%;
+				}
+
+				.controls {
+					flex-direction: column;
+				}
 			}
 		</style>
 	</head>
 	<body>
 		<div class="container">
+			<nav class="navigation">
+				<a href="/" class="nav-button">Standings</a>
+				<a href="/teams" class="nav-button">Teams</a>
+			</nav>
 			{ children... }
 		</div>
 	</body>
 	</html>
+}
+
+// Helper functions for styling
+func getPositionClass(position int, totalTeams int) string {
+	switch {
+	case position < 3:
+		return "promotion"
+	case position >= totalTeams-3:
+		return "relegation"
+	default:
+		return ""
+	}
+}
+
+func getGoalDiffClass(goalDiff int64) string {
+	switch {
+	case goalDiff > 0:
+		return "positive"
+	case goalDiff < 0:
+		return "negative"
+	default:
+		return ""
+	}
 }
