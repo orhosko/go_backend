@@ -8,28 +8,40 @@ import (
 	"database/sql"
 )
 
+type GameState struct {
+	ID          int64
+	CurrentWeek sql.NullInt64
+	SeasonID    int64
+}
+
 type Match struct {
-	ID     int64
-	Home   interface{}
-	Guest  interface{}
-	Played sql.NullBool
-	Week   sql.NullInt64
+	ID       int64
+	SeasonID int64
+	HomeID   int64
+	GuestID  int64
+	Played   sql.NullBool
+	Week     int64
 }
 
 type MatchResult struct {
-	ID     int64
-	Match  interface{}
-	Winner interface{}
+	ID         int64
+	MatchID    int64
+	HomeScore  int64
+	GuestScore int64
+	WinnerID   sql.NullInt64
 }
 
 type Season struct {
-	ID        int64
-	Name      string
-	Standings interface{}
+	ID         int64
+	Year       int64
+	IsCurrent  sql.NullBool
+	IsComplete sql.NullBool
 }
 
 type Standing struct {
 	ID       int64
+	TeamID   int64
+	SeasonID int64
 	Points   sql.NullInt64
 	Wins     sql.NullInt64
 	Draws    sql.NullInt64
@@ -41,12 +53,7 @@ type Team struct {
 	ID       int64
 	Name     string
 	Strength sql.NullInt64
-}
-
-type Teamstanding struct {
-	ID       int64
-	Team     interface{}
-	Standing interface{}
+	Budget   sql.NullInt64
 }
 
 type Teamstat struct {

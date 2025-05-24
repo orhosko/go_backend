@@ -10,27 +10,85 @@ import (
 	"database/sql"
 )
 
+const completeSeason = `-- name: CompleteSeason :exec
+UPDATE season SET is_complete = TRUE WHERE id = ?
+`
+
+func (q *Queries) CompleteSeason(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, completeSeason, id)
+	return err
+}
+
 const createFixture = `-- name: CreateFixture :exec
 INSERT INTO match (
-  home, guest, played, week
+  home_id, guest_id, played, week, season_id
 ) VALUES (
-  ?, ?, ?, ?
+  ?, ?, ?, ?, ?
 )
 `
 
 type CreateFixtureParams struct {
-	Home   interface{}
-	Guest  interface{}
-	Played sql.NullBool
-	Week   sql.NullInt64
+	HomeID   int64
+	GuestID  int64
+	Played   sql.NullBool
+	Week     int64
+	SeasonID int64
 }
 
 func (q *Queries) CreateFixture(ctx context.Context, arg CreateFixtureParams) error {
 	_, err := q.db.ExecContext(ctx, createFixture,
-		arg.Home,
-		arg.Guest,
+		arg.HomeID,
+		arg.GuestID,
 		arg.Played,
 		arg.Week,
+		arg.SeasonID,
+	)
+	return err
+}
+
+const createNewSeason = `-- name: CreateNewSeason :one
+INSERT INTO season (year, is_current, is_complete) VALUES (?, FALSE, FALSE) RETURNING id, year, is_current, is_complete
+`
+
+func (q *Queries) CreateNewSeason(ctx context.Context, year int64) (Season, error) {
+	row := q.db.QueryRowContext(ctx, createNewSeason, year)
+	var i Season
+	err := row.Scan(
+		&i.ID,
+		&i.Year,
+		&i.IsCurrent,
+		&i.IsComplete,
+	)
+	return i, err
+}
+
+const createStanding = `-- name: CreateStanding :exec
+INSERT INTO standing (
+  team_id, season_id, points, wins, draws, losses, goal_diff
+) VALUES (
+  ?, ?, ?, ?, ?, ?, ?
+)
+`
+
+type CreateStandingParams struct {
+	TeamID   int64
+	SeasonID int64
+	Points   sql.NullInt64
+	Wins     sql.NullInt64
+	Draws    sql.NullInt64
+	Losses   sql.NullInt64
+	GoalDiff sql.NullInt64
+}
+
+func (q *Queries) CreateStanding(ctx context.Context, arg CreateStandingParams) error {
+	_, err := q.db.ExecContext(ctx, createStanding,
+		arg.TeamID,
+		arg.SeasonID,
+		arg.Points,
+		arg.Wins,
+		arg.Draws,
+		arg.Losses,
+		arg.GoalDiff,
 	)
 	return err
 }
@@ -66,6 +124,176 @@ func (q *Queries) DeleteTeam(ctx context.Context, id int64) error {
 	return err
 }
 
+const getAllMatchesPlayedForWeek = `-- name: GetAllMatchesPlayedForWeek :one
+SELECT COUNT(*) = 0 as all_played FROM match WHERE week = ? AND played = FALSE AND season_id = ?
+`
+
+type GetAllMatchesPlayedForWeekParams struct {
+	Week     int64
+	SeasonID int64
+}
+
+func (q *Queries) GetAllMatchesPlayedForWeek(ctx context.Context, arg GetAllMatchesPlayedForWeekParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, getAllMatchesPlayedForWeek, arg.Week, arg.SeasonID)
+	var all_played bool
+	err := row.Scan(&all_played)
+	return all_played, err
+}
+
+const getCurrentSeason = `-- name: GetCurrentSeason :one
+SELECT id, year, is_current, is_complete FROM season WHERE is_current = TRUE LIMIT 1
+`
+
+func (q *Queries) GetCurrentSeason(ctx context.Context) (Season, error) {
+	row := q.db.QueryRowContext(ctx, getCurrentSeason)
+	var i Season
+	err := row.Scan(
+		&i.ID,
+		&i.Year,
+		&i.IsCurrent,
+		&i.IsComplete,
+	)
+	return i, err
+}
+
+const getCurrentWeek = `-- name: GetCurrentWeek :one
+SELECT current_week FROM game_state WHERE season_id = ? LIMIT 1
+`
+
+func (q *Queries) GetCurrentWeek(ctx context.Context, seasonID int64) (sql.NullInt64, error) {
+	row := q.db.QueryRowContext(ctx, getCurrentWeek, seasonID)
+	var current_week sql.NullInt64
+	err := row.Scan(&current_week)
+	return current_week, err
+}
+
+const getMatchResult = `-- name: GetMatchResult :one
+SELECT mr.id, mr.match_id, mr.home_score, mr.guest_score, mr.winner_id, 
+       ht.name as home_team_name, 
+       gt.name as guest_team_name
+FROM match_result mr
+JOIN match m ON mr.match_id = m.id
+JOIN team ht ON m.home_id = ht.id
+JOIN team gt ON m.guest_id = gt.id
+WHERE mr.match_id = ?
+`
+
+type GetMatchResultRow struct {
+	ID            int64
+	MatchID       int64
+	HomeScore     int64
+	GuestScore    int64
+	WinnerID      sql.NullInt64
+	HomeTeamName  string
+	GuestTeamName string
+}
+
+func (q *Queries) GetMatchResult(ctx context.Context, matchID int64) (GetMatchResultRow, error) {
+	row := q.db.QueryRowContext(ctx, getMatchResult, matchID)
+	var i GetMatchResultRow
+	err := row.Scan(
+		&i.ID,
+		&i.MatchID,
+		&i.HomeScore,
+		&i.GuestScore,
+		&i.WinnerID,
+		&i.HomeTeamName,
+		&i.GuestTeamName,
+	)
+	return i, err
+}
+
+const getMatchesByWeek = `-- name: GetMatchesByWeek :many
+SELECT m.id, m.season_id, m.home_id, m.guest_id, m.played, m.week, 
+       ht.name as home_team_name, 
+       gt.name as guest_team_name,
+       ht.strength as home_team_strength,
+       gt.strength as guest_team_strength
+FROM match m
+JOIN team ht ON m.home_id = ht.id
+JOIN team gt ON m.guest_id = gt.id
+WHERE m.week = ? AND m.season_id = ?
+`
+
+type GetMatchesByWeekParams struct {
+	Week     int64
+	SeasonID int64
+}
+
+type GetMatchesByWeekRow struct {
+	ID                int64
+	SeasonID          int64
+	HomeID            int64
+	GuestID           int64
+	Played            sql.NullBool
+	Week              int64
+	HomeTeamName      string
+	GuestTeamName     string
+	HomeTeamStrength  sql.NullInt64
+	GuestTeamStrength sql.NullInt64
+}
+
+func (q *Queries) GetMatchesByWeek(ctx context.Context, arg GetMatchesByWeekParams) ([]GetMatchesByWeekRow, error) {
+	rows, err := q.db.QueryContext(ctx, getMatchesByWeek, arg.Week, arg.SeasonID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetMatchesByWeekRow
+	for rows.Next() {
+		var i GetMatchesByWeekRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SeasonID,
+			&i.HomeID,
+			&i.GuestID,
+			&i.Played,
+			&i.Week,
+			&i.HomeTeamName,
+			&i.GuestTeamName,
+			&i.HomeTeamStrength,
+			&i.GuestTeamStrength,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getStanding = `-- name: GetStanding :one
+SELECT id, team_id, season_id, points, wins, draws, losses, goal_diff FROM standing
+WHERE team_id = ? AND season_id = ?
+LIMIT 1
+`
+
+type GetStandingParams struct {
+	TeamID   int64
+	SeasonID int64
+}
+
+func (q *Queries) GetStanding(ctx context.Context, arg GetStandingParams) (Standing, error) {
+	row := q.db.QueryRowContext(ctx, getStanding, arg.TeamID, arg.SeasonID)
+	var i Standing
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.SeasonID,
+		&i.Points,
+		&i.Wins,
+		&i.Draws,
+		&i.Losses,
+		&i.GoalDiff,
+	)
+	return i, err
+}
+
 const getTeam = `-- name: GetTeam :one
 SELECT id, name, strength FROM team
 WHERE id = ?
@@ -92,24 +320,77 @@ func (q *Queries) GetTeamByName(ctx context.Context, name string) (Team, error) 
 	return i, err
 }
 
-const getTeamStanding = `-- name: GetTeamStanding :one
-SELECT id, points, wins, draws, losses, goal_diff FROM standing
-WHERE id = ?
-LIMIT 1
+const getUnplayedMatchesByWeek = `-- name: GetUnplayedMatchesByWeek :many
+SELECT m.id, m.season_id, m.home_id, m.guest_id, m.played, m.week, 
+       ht.name as home_team_name, 
+       gt.name as guest_team_name,
+       ht.strength as home_team_strength,
+       gt.strength as guest_team_strength
+FROM match m
+JOIN team ht ON m.home_id = ht.id
+JOIN team gt ON m.guest_id = gt.id
+WHERE m.week = ? AND m.played = FALSE AND m.season_id = ?
 `
 
-func (q *Queries) GetTeamStanding(ctx context.Context, id int64) (Standing, error) {
-	row := q.db.QueryRowContext(ctx, getTeamStanding, id)
-	var i Standing
-	err := row.Scan(
-		&i.ID,
-		&i.Points,
-		&i.Wins,
-		&i.Draws,
-		&i.Losses,
-		&i.GoalDiff,
-	)
-	return i, err
+type GetUnplayedMatchesByWeekParams struct {
+	Week     int64
+	SeasonID int64
+}
+
+type GetUnplayedMatchesByWeekRow struct {
+	ID                int64
+	SeasonID          int64
+	HomeID            int64
+	GuestID           int64
+	Played            sql.NullBool
+	Week              int64
+	HomeTeamName      string
+	GuestTeamName     string
+	HomeTeamStrength  sql.NullInt64
+	GuestTeamStrength sql.NullInt64
+}
+
+func (q *Queries) GetUnplayedMatchesByWeek(ctx context.Context, arg GetUnplayedMatchesByWeekParams) ([]GetUnplayedMatchesByWeekRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUnplayedMatchesByWeek, arg.Week, arg.SeasonID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUnplayedMatchesByWeekRow
+	for rows.Next() {
+		var i GetUnplayedMatchesByWeekRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SeasonID,
+			&i.HomeID,
+			&i.GuestID,
+			&i.Played,
+			&i.Week,
+			&i.HomeTeamName,
+			&i.GuestTeamName,
+			&i.HomeTeamStrength,
+			&i.GuestTeamStrength,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const incrementWeek = `-- name: IncrementWeek :exec
+UPDATE game_state SET current_week = current_week + 1 WHERE season_id = ?
+`
+
+func (q *Queries) IncrementWeek(ctx context.Context, seasonID int64) error {
+	_, err := q.db.ExecContext(ctx, incrementWeek, seasonID)
+	return err
 }
 
 const listTeams = `-- name: ListTeams :many
@@ -140,65 +421,103 @@ func (q *Queries) ListTeams(ctx context.Context) ([]Team, error) {
 	return items, nil
 }
 
+const markMatchAsPlayed = `-- name: MarkMatchAsPlayed :exec
+UPDATE match SET played = TRUE WHERE id = ?
+`
+
+func (q *Queries) MarkMatchAsPlayed(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, markMatchAsPlayed, id)
+	return err
+}
+
+const resetToYear = `-- name: ResetToYear :exec
+DELETE FROM match_result
+`
+
+func (q *Queries) ResetToYear(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, resetToYear)
+	return err
+}
+
 const saveResult = `-- name: SaveResult :exec
-UPDATE match
-SET played = ?
-WHERE id = ?
+INSERT INTO match_result (
+  match_id, home_score, guest_score, winner_id
+) VALUES (
+  ?, ?, ?, ?
+)
 `
 
 type SaveResultParams struct {
-	Played sql.NullBool
-	ID     int64
+	MatchID    int64
+	HomeScore  int64
+	GuestScore int64
+	WinnerID   sql.NullInt64
 }
 
 func (q *Queries) SaveResult(ctx context.Context, arg SaveResultParams) error {
-	_, err := q.db.ExecContext(ctx, saveResult, arg.Played, arg.ID)
+	_, err := q.db.ExecContext(ctx, saveResult,
+		arg.MatchID,
+		arg.HomeScore,
+		arg.GuestScore,
+		arg.WinnerID,
+	)
 	return err
 }
 
-const updateTeamStrenght = `-- name: UpdateTeamStrenght :exec
-UPDATE team
-SET strength = ?
-WHERE id = ?
+const setCurrentSeason = `-- name: SetCurrentSeason :exec
+UPDATE season SET is_current = (season.id = ?) WHERE season.id IN (SELECT id FROM season)
 `
 
-type UpdateTeamStrenghtParams struct {
-	Strength sql.NullInt64
-	ID       int64
-}
-
-func (q *Queries) UpdateTeamStrenght(ctx context.Context, arg UpdateTeamStrenghtParams) error {
-	_, err := q.db.ExecContext(ctx, updateTeamStrenght, arg.Strength, arg.ID)
+func (q *Queries) SetCurrentSeason(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, setCurrentSeason, id)
 	return err
 }
 
-const standing = `-- name: standing :exec
+const updateStanding = `-- name: UpdateStanding :exec
 UPDATE standing
 SET points = ?,
-wins = ?,
-draws = ?,
-losses = ?,
-goal_diff = ?
-WHERE id = ?
+    wins = ?,
+    draws = ?,
+    losses = ?,
+    goal_diff = ?
+WHERE team_id = ? AND season_id = ?
 `
 
-type standingParams struct {
+type UpdateStandingParams struct {
 	Points   sql.NullInt64
 	Wins     sql.NullInt64
 	Draws    sql.NullInt64
 	Losses   sql.NullInt64
 	GoalDiff sql.NullInt64
-	ID       int64
+	TeamID   int64
+	SeasonID int64
 }
 
-func (q *Queries) standing(ctx context.Context, arg standingParams) error {
-	_, err := q.db.ExecContext(ctx, standing,
+func (q *Queries) UpdateStanding(ctx context.Context, arg UpdateStandingParams) error {
+	_, err := q.db.ExecContext(ctx, updateStanding,
 		arg.Points,
 		arg.Wins,
 		arg.Draws,
 		arg.Losses,
 		arg.GoalDiff,
-		arg.ID,
+		arg.TeamID,
+		arg.SeasonID,
 	)
+	return err
+}
+
+const updateTeamStrength = `-- name: UpdateTeamStrength :exec
+UPDATE team
+SET strength = ?
+WHERE id = ?
+`
+
+type UpdateTeamStrengthParams struct {
+	Strength sql.NullInt64
+	ID       int64
+}
+
+func (q *Queries) UpdateTeamStrength(ctx context.Context, arg UpdateTeamStrengthParams) error {
+	_, err := q.db.ExecContext(ctx, updateTeamStrength, arg.Strength, arg.ID)
 	return err
 }

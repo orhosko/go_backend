@@ -14,7 +14,7 @@ import (
 // DB represents the database connection and sqlc queries.
 type DB struct {
 	Queries *sqlc.Queries
-	conn    *sql.DB
+	Conn    *sql.DB
 }
 
 // NewDB initializes a new database connection and sqlc queries.
@@ -39,15 +39,15 @@ func NewDB(databaseURL string) (*DB, error) {
 
 	return &DB{
 		Queries: queries,
-		conn:    db,
+		Conn:    db,
 	}, nil
 }
 
 // Close closes the database connection.
 func (d *DB) Close() error {
-	if d.conn != nil {
+	if d.Conn != nil {
 		log.Println("Closing database connection.")
-		return d.conn.Close()
+		return d.Conn.Close()
 	}
 	return nil
 }
@@ -60,7 +60,7 @@ func (d *DB) EnsureSchema(schemaPath string) error {
 		return fmt.Errorf("failed to read schema file: %w", err)
 	}
 
-	_, err = d.conn.Exec(string(schema))
+	_, err = d.Conn.Exec(string(schema))
 	if err != nil {
 		return fmt.Errorf("failed to execute schema: %w", err)
 	}
