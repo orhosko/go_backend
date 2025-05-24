@@ -6,11 +6,11 @@
     go run main.go
 #+end_src
 
-* build
+* Build
 
 #+begin_src sh
-    mkdir -p bin
-	go build -o ./bin/main main.go
+mkdir -p bin
+go build -o ./bin/main main.go
 #+end_src
 
 * Develop
@@ -21,10 +21,9 @@ First install these tools:
 - sqlc
 
 #+begin_src sh
-    air -c .air.toml
+air -c .air.toml
 #+end_src
 
 * TODOs:
 - better prediction
-- team budgets to prediction
-- postgresql/mysql 
+- port to postgresql/mysql and deploy
