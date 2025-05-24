@@ -44,7 +44,6 @@ func main() {
 
 	// Register all routes
 	handlers.RegisterHomeRoutes(router, repo)
-	handlers.RegisterPingRoutes(router)
 	handlers.RegisterTeamRoutes(router, repo)
 	handlers.RegisterFixtureRoutes(router, repo)
 	handlers.RegisterSeasonRoutes(router, repo)
