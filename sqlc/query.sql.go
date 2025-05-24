@@ -95,22 +95,28 @@ func (q *Queries) CreateStanding(ctx context.Context, arg CreateStandingParams) 
 
 const createTeam = `-- name: CreateTeam :one
 INSERT INTO team (
-  name, strength
+  name, strength, budget
 ) VALUES (
-  ?, ?
+  ?, ?, ?
 )
-RETURNING id, name, strength
+RETURNING id, name, strength, budget
 `
 
 type CreateTeamParams struct {
 	Name     string
 	Strength sql.NullInt64
+	Budget   sql.NullInt64
 }
 
 func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error) {
-	row := q.db.QueryRowContext(ctx, createTeam, arg.Name, arg.Strength)
+	row := q.db.QueryRowContext(ctx, createTeam, arg.Name, arg.Strength, arg.Budget)
 	var i Team
-	err := row.Scan(&i.ID, &i.Name, &i.Strength)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Strength,
+		&i.Budget,
+	)
 	return i, err
 }
 
@@ -295,7 +301,7 @@ func (q *Queries) GetStanding(ctx context.Context, arg GetStandingParams) (Stand
 }
 
 const getTeam = `-- name: GetTeam :one
-SELECT id, name, strength FROM team
+SELECT id, name, strength, budget FROM team
 WHERE id = ?
 LIMIT 1
 `
@@ -303,12 +309,17 @@ LIMIT 1
 func (q *Queries) GetTeam(ctx context.Context, id int64) (Team, error) {
 	row := q.db.QueryRowContext(ctx, getTeam, id)
 	var i Team
-	err := row.Scan(&i.ID, &i.Name, &i.Strength)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Strength,
+		&i.Budget,
+	)
 	return i, err
 }
 
 const getTeamByName = `-- name: GetTeamByName :one
-SELECT id, name, strength FROM team
+SELECT id, name, strength, budget FROM team
 WHERE name = ?
 LIMIT 1
 `
@@ -316,7 +327,12 @@ LIMIT 1
 func (q *Queries) GetTeamByName(ctx context.Context, name string) (Team, error) {
 	row := q.db.QueryRowContext(ctx, getTeamByName, name)
 	var i Team
-	err := row.Scan(&i.ID, &i.Name, &i.Strength)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Strength,
+		&i.Budget,
+	)
 	return i, err
 }
 
@@ -394,7 +410,7 @@ func (q *Queries) IncrementWeek(ctx context.Context, seasonID int64) error {
 }
 
 const listTeams = `-- name: ListTeams :many
-SELECT id, name, strength FROM team
+SELECT id, name, strength, budget FROM team
 ORDER BY name
 `
 
@@ -407,7 +423,12 @@ func (q *Queries) ListTeams(ctx context.Context) ([]Team, error) {
 	var items []Team
 	for rows.Next() {
 		var i Team
-		if err := rows.Scan(&i.ID, &i.Name, &i.Strength); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Strength,
+			&i.Budget,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -445,6 +466,10 @@ INSERT INTO match_result (
 ) VALUES (
   ?, ?, ?, ?
 )
+ON CONFLICT(match_id) DO UPDATE SET
+  home_score = excluded.home_score,
+  guest_score = excluded.guest_score,
+  winner_id = excluded.winner_id
 `
 
 type SaveResultParams struct {

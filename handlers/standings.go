@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"sort"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/orhosko/go-backend/repository"
@@ -11,8 +12,11 @@ import (
 	"github.com/orhosko/go-backend/templates"
 )
 
+// RegisterStandingsRoutes registers all standings related routes
 func RegisterStandingsRoutes(router *gin.Engine, repo repository.Repository) {
-	router.GET("/", handleGetStandings(repo))
+	router.GET("/standings", handleGetStandings(repo))
+	router.POST("/standings/recalculate", handleRecalculateStandings(repo))
+	router.POST("/standings/team/:teamId", handleUpdateTeamStanding(repo))
 }
 
 func handleGetStandings(repo repository.Repository) gin.HandlerFunc {
@@ -162,4 +166,89 @@ func sortStandings(standings []templates.TeamStanding) {
 		}
 		return standings[i].Standing.GoalDiff.Int64 > standings[j].Standing.GoalDiff.Int64
 	})
+}
+
+func handleRecalculateStandings(repo repository.Repository) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		reqCtx := c.Request.Context()
+
+		// Get current season if not specified
+		seasonID := c.Query("seasonId")
+		var currentSeason sqlc.Season
+		var err error
+
+		if seasonID == "" {
+			currentSeason, err = repo.GetCurrentSeason(reqCtx)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get current season"})
+				return
+			}
+		} else {
+			seasonIDInt, err := strconv.ParseInt(seasonID, 10, 64)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid season ID"})
+				return
+			}
+			currentSeason.ID = seasonIDInt
+		}
+
+		// Get all teams in the season
+		teams, err := repo.ListTeams(reqCtx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch teams"})
+			return
+		}
+
+		// Recalculate standings for each team
+		for _, team := range teams {
+			err = recalculateTeamStanding(reqCtx, repo, currentSeason.ID, team.ID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update standings for team " + team.Name})
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Standings recalculated successfully"})
+	}
+}
+
+func handleUpdateTeamStanding(repo repository.Repository) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		reqCtx := c.Request.Context()
+
+		// Parse team ID from URL
+		teamID, err := strconv.ParseInt(c.Param("teamId"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid team ID"})
+			return
+		}
+
+		// Get current season if not specified
+		seasonID := c.Query("seasonId")
+		var currentSeason sqlc.Season
+
+		if seasonID == "" {
+			currentSeason, err = repo.GetCurrentSeason(reqCtx)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get current season"})
+				return
+			}
+		} else {
+			seasonIDInt, err := strconv.ParseInt(seasonID, 10, 64)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid season ID"})
+				return
+			}
+			currentSeason.ID = seasonIDInt
+		}
+
+		// Recalculate standings for the specified team
+		err = recalculateTeamStanding(reqCtx, repo, currentSeason.ID, teamID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update team standing"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Team standing updated successfully"})
+	}
 }

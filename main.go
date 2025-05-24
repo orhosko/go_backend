@@ -45,6 +45,8 @@ func main() {
 	handlers.RegisterTeamRoutes(router, repo)
 	handlers.RegisterFixtureRoutes(router, repo)
 	handlers.RegisterSeasonRoutes(router, repo)
+	handlers.RegisterMatchRoutes(router, repo)
+	handlers.RegisterStandingsRoutes(router, repo)
 
 	// Start the server without closing the database connection
 	if err := router.Run(); err != nil {

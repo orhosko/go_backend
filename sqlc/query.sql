@@ -10,7 +10,11 @@ INSERT INTO match_result (
   match_id, home_score, guest_score, winner_id
 ) VALUES (
   ?, ?, ?, ?
-);
+)
+ON CONFLICT(match_id) DO UPDATE SET
+  home_score = excluded.home_score,
+  guest_score = excluded.guest_score,
+  winner_id = excluded.winner_id;
 
 -- name: ListTeams :many
 SELECT * FROM team

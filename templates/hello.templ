@@ -707,23 +707,12 @@ templ Layout(meta PageMeta) {
 			<nav class="navigation">
 				<a href="/" class="nav-button">Standings</a>
 				<a href="/teams" class="nav-button">Teams</a>
+				<a href="/matches" class="nav-button">Matches</a>
 			</nav>
 			{ children... }
 		</div>
 	</body>
 	</html>
-}
-
-// Helper functions for styling
-func getPositionClass(position int, totalTeams int) string {
-	switch {
-	case position < 3:
-		return "promotion"
-	case position >= totalTeams-3:
-		return "relegation"
-	default:
-		return ""
-	}
 }
 
 func getGoalDiffClass(goalDiff int64) string {

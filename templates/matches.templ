@@ -1,0 +1,366 @@
+package templates
+
+import (
+	"fmt"
+	"github.com/orhosko/go-backend/sqlc"
+)
+
+// MatchData holds the data for a single match
+type MatchData struct {
+	Match          sqlc.Match
+	HomeTeamName   string
+	GuestTeamName  string
+	Result         *sqlc.GetMatchResultRow
+}
+
+// MatchesPageData holds all the data needed for the matches page
+type MatchesPageData struct {
+	Matches       map[int][]MatchData // Map of week number to matches
+	CurrentSeason sqlc.Season
+	CurrentWeek   int
+}
+
+// Matches is the main template for displaying match information by week
+templ Matches(data MatchesPageData) {
+	@Layout(PageMeta{Title: "League Matches", Description: "Match results by week"}) {
+		<div class="page-header">
+			<h1>League Matches - Season { fmt.Sprintf("%d", data.CurrentSeason.Year) }</h1>
+			<div class="current-week">Week { fmt.Sprintf("%d", data.CurrentWeek) }</div>
+		</div>
+
+		<div class="matches-container">
+			for week := 1; week <= data.CurrentWeek; week++ {
+				if matches, exists := data.Matches[week]; exists {
+					<div class="week-section">
+						<div class="week-header">
+							<h2>Week { fmt.Sprintf("%d", week) }</h2>
+						</div>
+						<div class="matches-grid">
+							for _, match := range matches {
+								<div class="match-card" id={ fmt.Sprintf("match-%d", match.Match.ID) }>
+									<div class="match-teams">
+										<span class="team home">{ match.HomeTeamName }</span>
+										<span class="vs">vs</span>
+										<span class="team away">{ match.GuestTeamName }</span>
+									</div>
+									if match.Result != nil {
+										<div class="match-result">
+											<form method="POST" action={ templ.SafeURL(fmt.Sprintf("/matches/%d/edit", match.Match.ID)) } class="score-form">
+												<div class="score-container">
+													<input type="number" 
+														name="home_score" 
+														value={ fmt.Sprintf("%d", match.Result.HomeScore) } 
+														class="score-input" 
+														disabled
+														min="0"
+													/>
+													<span class="score-separator">-</span>
+													<input type="number" 
+														name="guest_score" 
+														value={ fmt.Sprintf("%d", match.Result.GuestScore) } 
+														class="score-input" 
+														disabled
+														min="0"
+													/>
+												</div>
+												<div class="match-actions">
+													<button 
+														type="button"
+														class="btn btn-secondary edit-btn" 
+														data-match-id={ fmt.Sprint(match.Match.ID) }
+														onclick="toggleEdit(this.dataset.matchId)"
+													>
+														Edit
+													</button>
+													<button 
+														type="submit"
+														class="btn btn-primary save-btn" 
+														style="display: none;"
+													>
+														Save
+													</button>
+													<button 
+														type="button"
+														class="btn btn-secondary cancel-btn" 
+														style="display: none;"
+														data-match-id={ fmt.Sprint(match.Match.ID) }
+														onclick="cancelEdit(this.dataset.matchId)"
+													>
+														Cancel
+													</button>
+												</div>
+											</form>
+										</div>
+									} else {
+										<div class="match-status">
+											<span class="pending">Not Played</span>
+										</div>
+									}
+								</div>
+							}
+						</div>
+					</div>
+				}
+			}
+		</div>
+
+		<script>
+			function toggleEdit(matchId) {
+				const matchCard = document.getElementById(`match-${matchId}`);
+				const form = matchCard.querySelector('.score-form');
+				const inputs = form.querySelectorAll('.score-input');
+				const editBtn = form.querySelector('.edit-btn');
+				const saveBtn = form.querySelector('.save-btn');
+				const cancelBtn = form.querySelector('.cancel-btn');
+
+				// Store original values for cancel
+				inputs.forEach(input => {
+					input.dataset.originalValue = input.value;
+					input.disabled = false;
+				});
+
+				editBtn.style.display = 'none';
+				saveBtn.style.display = 'inline-block';
+				cancelBtn.style.display = 'inline-block';
+			}
+
+			function cancelEdit(matchId) {
+				const matchCard = document.getElementById(`match-${matchId}`);
+				const form = matchCard.querySelector('.score-form');
+				const inputs = form.querySelectorAll('.score-input');
+				const editBtn = form.querySelector('.edit-btn');
+				const saveBtn = form.querySelector('.save-btn');
+				const cancelBtn = form.querySelector('.cancel-btn');
+
+				// Restore original values
+				inputs.forEach(input => {
+					input.value = input.dataset.originalValue;
+					input.disabled = true;
+				});
+
+				editBtn.style.display = 'inline-block';
+				saveBtn.style.display = 'none';
+				cancelBtn.style.display = 'none';
+			}
+		</script>
+
+		<style>
+			.matches-container {
+				max-width: 1200px;
+				margin: 0 auto;
+				padding: 20px;
+			}
+
+			.page-header {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-bottom: 20px;
+				flex-wrap: wrap;
+				gap: 15px;
+			}
+
+			.page-header h1 {
+				margin: 0;
+			}
+
+			.current-week {
+				font-size: 1.2rem;
+				color: var(--secondary-color);
+			}
+
+			.week-section {
+				margin-bottom: 30px;
+				background-color: var(--card-background);
+				border-radius: 8px;
+				padding: 20px;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+			}
+
+			.week-header {
+				margin-bottom: 15px;
+				padding-bottom: 10px;
+				border-bottom: 2px solid var(--border-color);
+			}
+
+			.week-header h2 {
+				color: var(--primary-color);
+				margin: 0;
+			}
+
+			.matches-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+				gap: 15px;
+			}
+
+			.match-card {
+				background-color: white;
+				border-radius: 6px;
+				padding: 15px;
+				box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+				min-height: 120px;
+				display: flex;
+				flex-direction: column;
+			}
+
+			.match-teams {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-bottom: 10px;
+				flex-shrink: 0;
+			}
+
+			.team {
+				flex: 1;
+				font-weight: 600;
+				min-width: 0;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			.home {
+				text-align: right;
+				padding-right: 10px;
+			}
+
+			.away {
+				text-align: left;
+				padding-left: 10px;
+			}
+
+			.vs {
+				color: var(--text-color);
+				opacity: 0.6;
+				padding: 0 10px;
+				flex-shrink: 0;
+			}
+
+			.match-result {
+				text-align: center;
+				font-size: 1.2rem;
+				font-weight: 700;
+				color: var(--secondary-color);
+				flex-grow: 1;
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+			}
+
+			.score-container {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				justify-content: center;
+				margin-bottom: 10px;
+			}
+
+			.score-input {
+				width: 50px;
+				text-align: center;
+				padding: 5px;
+				border: 1px solid var(--border-color);
+				border-radius: 4px;
+				font-size: 1.1rem;
+				font-weight: 600;
+				-moz-appearance: textfield;
+			}
+
+			.score-input::-webkit-outer-spin-button,
+			.score-input::-webkit-inner-spin-button {
+				-webkit-appearance: none;
+				margin: 0;
+			}
+
+			.score-input:disabled {
+				background-color: transparent;
+				border-color: transparent;
+				color: var(--secondary-color);
+			}
+
+			.score-separator {
+				font-size: 1.2rem;
+				color: var(--text-color);
+				opacity: 0.6;
+				flex-shrink: 0;
+			}
+
+			.match-status {
+				text-align: center;
+				flex-grow: 1;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+			}
+
+			.pending {
+				color: var(--text-color);
+				opacity: 0.6;
+				font-size: 0.9rem;
+			}
+
+			.score-form {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				width: 100%;
+			}
+
+			.match-actions {
+				display: flex;
+				gap: 10px;
+				margin-top: 10px;
+			}
+
+			.btn {
+				padding: 5px 15px;
+				border-radius: 4px;
+				cursor: pointer;
+				font-size: 0.9rem;
+				transition: all 0.2s;
+			}
+
+			.btn-secondary {
+				background-color: var(--secondary-color);
+				color: white;
+				border: none;
+			}
+
+			.btn-primary {
+				background-color: var(--primary-color);
+				color: white;
+				border: none;
+			}
+
+			.btn:hover {
+				opacity: 0.9;
+			}
+
+			@media (max-width: 768px) {
+				.page-header {
+					flex-direction: column;
+					text-align: center;
+				}
+
+				.matches-grid {
+					grid-template-columns: 1fr;
+				}
+
+				.match-card {
+					margin-bottom: 10px;
+				}
+
+				.match-actions {
+					flex-direction: column;
+					width: 100%;
+				}
+
+				.btn {
+					width: 100%;
+				}
+			}
+		</style>
+	}
+}

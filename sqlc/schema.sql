@@ -39,7 +39,7 @@ CREATE TABLE match (
 
 CREATE TABLE match_result (
     id          INTEGER     PRIMARY KEY,
-    match_id    INTEGER     NOT NULL,
+    match_id    INTEGER     NOT NULL UNIQUE,
     home_score  INTEGER     NOT NULL,
     guest_score INTEGER     NOT NULL,
     winner_id   INTEGER,
@@ -63,7 +63,6 @@ SELECT 1, id FROM season WHERE is_current = TRUE;
 
 -- Initialize teams with budgets
 INSERT INTO team (name, strength, budget) VALUES ('Manchester City', 10, 1000000000);
-INSERT INTO team (name, strength, budget) VALUES ('Manchester United', 8, 800000000);
 INSERT INTO team (name, strength, budget) VALUES ('Chelsea', 7, 700000000);
 INSERT INTO team (name, strength, budget) VALUES ('Arsenal', 6, 600000000);
 INSERT INTO team (name, strength, budget) VALUES ('Liverpool', 9, 900000000);
