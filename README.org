@@ -1,9 +1,17 @@
 * Go + Templ + Htmx + Gin + Sqlc
 
 * Run
-```
+
+#+begin_src sh
     go run main.go
-```
+#+end_src
+
+* build
+
+#+begin_src sh
+    mkdir -p bin
+	go build -o ./bin/main main.go
+#+end_src
 
 * Develop
 
@@ -12,9 +20,9 @@ First install these tools:
 - templ
 - sqlc
 
-```
+#+begin_src sh
     air -c .air.toml
-```
+#+end_src
 
 * TODOs:
 - better prediction

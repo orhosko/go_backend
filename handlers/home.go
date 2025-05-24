@@ -197,8 +197,8 @@ func handleHome(repo repository.Repository) gin.HandlerFunc {
 			IsSeasonComplete:        isSeasonComplete,
 		}
 
-		helloComponent := templates.Standings(standingData)
+		component := templates.Index(standingData)
 		c.Status(http.StatusOK)
-		helloComponent.Render(c.Request.Context(), c.Writer)
+		component.Render(c.Request.Context(), c.Writer)
 	}
 }

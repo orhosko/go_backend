@@ -1,0 +1,223 @@
+package templates
+
+import (
+	"fmt"
+	"github.com/orhosko/go-backend/sqlc"
+)
+
+// TeamStanding combines a team with its standing
+type TeamStanding struct {
+	Team     sqlc.Team
+	Standing sqlc.Standing
+}
+
+// MatchFixture is a simplified struct for displaying upcoming fixtures
+type MatchFixture struct {
+	HomeTeamName  string
+	GuestTeamName string
+}
+
+// StandingsPageData holds all the data needed for the standings page.
+type StandingsPageData struct {
+	CurrentWeek             int
+	CurrentYear            int
+	LeagueTable            []TeamStanding
+	MatchResults           []MatchDisplay
+	ChampionshipPredictions []TeamPrediction
+	Fixtures               []MatchFixture
+	IsSeasonComplete       bool
+}
+
+// MatchDisplay is a simplified struct for displaying match results.
+type MatchDisplay struct {
+	HomeTeamName  string
+	GuestTeamName string
+	HomeScore     int64
+	GuestScore    int64
+}
+
+// TeamPrediction represents a team's championship prediction percentage.
+type TeamPrediction struct {
+	TeamName    string
+	Probability float64 // e.g., 0.60 for 60%
+}
+
+// Index is the main template for displaying the league standings.
+templ Index(data StandingsPageData) {
+	@Layout(PageMeta{Title: fmt.Sprintf("League Standings - Week %d, Season %d", data.CurrentWeek, data.CurrentYear), Description: "Current football league standings and match results"}) {
+		<div class="page-header">
+			<h1>League Table - Week { fmt.Sprintf("%d", data.CurrentWeek) }, Season { fmt.Sprintf("%d", data.CurrentYear) }</h1>
+			<div class="season-controls">
+				<form method="POST" action="/reset-to-2025" class="control-form">
+					<button type="submit" class="btn btn-warning">Reset to 2025</button>
+				</form>
+				if data.IsSeasonComplete {
+					<form method="POST" action="/start-new-season" class="control-form">
+						<button type="submit" class="btn btn-success">Start New Season</button>
+					</form>
+				}
+			</div>
+		</div>
+
+		<div class="main-content">
+			<div class="left-section">
+				<div class="league-section">
+					@LeagueTable(data.LeagueTable)
+				</div>
+				<div class="fixtures">
+					<h3>Upcoming Fixtures</h3>
+					@Fixtures(data.Fixtures)
+					if !data.IsSeasonComplete {
+						<div class="controls">
+							<form method="POST" action="/play-week" class="control-form">
+								if len(data.Fixtures) == 0 {
+									<button type="submit" class="btn btn-primary" disabled>Simulate Week { fmt.Sprintf("%d", data.CurrentWeek) }</button>
+								} else {
+									<button type="submit" class="btn btn-primary">Simulate Week { fmt.Sprintf("%d", data.CurrentWeek) }</button>
+								}
+							</form>
+							<form method="POST" action="/next-week" class="control-form">
+								if len(data.Fixtures) > len(data.MatchResults) {
+									<button type="submit" class="btn btn-secondary" disabled>Next Week</button>
+								} else {
+									<button type="submit" class="btn btn-secondary">Next Week</button>
+								}
+							</form>
+							<form method="POST" action="/play-all" class="control-form">
+								if len(data.Fixtures) == 0 {
+									<button type="submit" class="btn btn-success" disabled>Play All Remaining Matches</button>
+								} else {
+									<button type="submit" class="btn btn-success">Play All Remaining Matches</button>
+								}
+							</form>
+						</div>
+					}
+				</div>
+			</div>
+			<div class="sidebar-section">
+				<div class="match-results">
+					<h3>{ fmt.Sprintf("%d", data.CurrentWeek) }th Week Match Results</h3>
+					@MatchResults(data.MatchResults)
+				</div>
+				<div class="predictions">
+					<h3>Championship Predictions</h3>
+					@ChampionshipPredictions(data.ChampionshipPredictions)
+				</div>
+			</div>
+		</div>
+	}
+}
+
+// LeagueTable displays the league table.
+templ LeagueTable(standings []TeamStanding) {
+	<div class="league-table-container">
+		<table class="league-table">
+			<thead>
+				<tr>
+					<th class="position">#</th>
+					<th class="team-name">Team</th>
+					<th class="points">PTS</th>
+					<th>P</th>
+					<th>W</th>
+					<th>D</th>
+					<th>L</th>
+					<th>GD</th>
+				</tr>
+			</thead>
+			<tbody>
+				for i, ts := range standings {
+					<tr>
+						<td class="position">{ fmt.Sprintf("%d", i+1) }</td>
+						<td class="team-name">{ ts.Team.Name }</td>
+						<td class="points">{ fmt.Sprintf("%d", ts.Standing.Points.Int64) }</td>
+						<td>{ fmt.Sprintf("%d", ts.Standing.Wins.Int64 + ts.Standing.Draws.Int64 + ts.Standing.Losses.Int64) }</td>
+						<td>{ fmt.Sprintf("%d", ts.Standing.Wins.Int64) }</td>
+						<td>{ fmt.Sprintf("%d", ts.Standing.Draws.Int64) }</td>
+						<td>{ fmt.Sprintf("%d", ts.Standing.Losses.Int64) }</td>
+						<td class={ getGoalDiffClass(ts.Standing.GoalDiff.Int64) }>{ fmt.Sprintf("%d", ts.Standing.GoalDiff.Int64) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+// MatchResults displays the results of the current week's matches.
+templ MatchResults(matches []MatchDisplay) {
+	<div class="match-results-container">
+		if len(matches) == 0 {
+			<div class="no-matches">No matches played this week.</div>
+		} else {
+			for _, match := range matches {
+				<div class="match-card">
+					<div class="team home">
+						<span class="team-name">{ match.HomeTeamName }</span>
+						<span class="score">{ fmt.Sprintf("%d", match.HomeScore) }</span>
+					</div>
+					<div class="match-separator">
+						<span>-</span>
+					</div>
+					<div class="team away">
+						<span class="score">{ fmt.Sprintf("%d", match.GuestScore) }</span>
+						<span class="team-name">{ match.GuestTeamName }</span>
+					</div>
+				</div>
+			}
+		}
+	</div>
+}
+
+// ChampionshipPredictions displays the predictions for championship.
+templ ChampionshipPredictions(predictions []TeamPrediction) {
+	<div class="predictions-container">
+		if len(predictions) == 0 {
+			<div class="no-predictions">No predictions available.</div>
+		} else {
+			for _, pred := range predictions {
+				<div class="prediction-card">
+					<div class="team-info">
+						<span class="team-name">{ pred.TeamName }</span>
+						<div class="probability-bar">
+							<div class="probability-fill" style={ fmt.Sprintf("width: %.1f%%", pred.Probability*100) }></div>
+						</div>
+					</div>
+					<span class="probability-value">{ fmt.Sprintf("%.1f%%", pred.Probability*100) }</span>
+				</div>
+			}
+		}
+	</div>
+}
+
+// Fixtures displays the upcoming matches
+templ Fixtures(fixtures []MatchFixture) {
+	<div class="fixtures-container">
+		if len(fixtures) == 0 {
+			<div class="no-fixtures">No upcoming fixtures.</div>
+		} else {
+			for _, fixture := range fixtures {
+				<div class="fixture-card">
+					<div class="team home">
+						<span class="team-name">{ fixture.HomeTeamName }</span>
+					</div>
+					<div class="fixture-separator">
+						<span>-</span>
+					</div>
+					<div class="team away">
+						<span class="team-name">{ fixture.GuestTeamName }</span>
+					</div>
+				</div>
+			}
+		}
+	</div>
+}
+
+func getGoalDiffClass(goalDiff int64) string {
+	switch {
+	case goalDiff > 0:
+		return "positive"
+	case goalDiff < 0:
+		return "negative"
+	default:
+		return ""
+	}
+} 

@@ -39,6 +39,9 @@ func main() {
 	// Initialize Gin router
 	router := gin.Default()
 
+	// Serve static files
+	router.Static("/static", "./static")
+
 	// Register all routes
 	handlers.RegisterHomeRoutes(router, repo)
 	handlers.RegisterPingRoutes(router)

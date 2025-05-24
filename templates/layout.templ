@@ -1,0 +1,32 @@
+package templates
+
+// PageMeta defines common metadata for a page.
+type PageMeta struct {
+	Title       string
+	Description string
+}
+
+// Layout is the base template for all pages.
+templ Layout(meta PageMeta) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>{ meta.Title }</title>
+		<meta name="description" content={ meta.Description }/>
+		<script src="https://unpkg.com/htmx.org@1.9.10" integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC" crossorigin="anonymous"></script>
+		<link rel="stylesheet" href="/static/css/main.css"/>
+	</head>
+	<body>
+		<div class="container">
+			<nav class="navigation">
+				<a href="/" class="nav-button">Standings</a>
+				<a href="/teams" class="nav-button">Teams</a>
+				<a href="/matches" class="nav-button">Matches</a>
+			</nav>
+			{ children... }
+		</div>
+	</body>
+	</html>
+} 

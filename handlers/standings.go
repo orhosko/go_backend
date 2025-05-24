@@ -144,7 +144,7 @@ func handleGetStandings(repo repository.Repository) gin.HandlerFunc {
 		totalWeeks := 2 * (len(teams) - 1)
 		isSeasonComplete := currentWeek >= totalWeeks && len(fixtures) == 0
 
-		component := templates.Standings(templates.StandingsPageData{
+		component := templates.Index(templates.StandingsPageData{
 			CurrentWeek:             currentWeek,
 			CurrentYear:             int(currentSeason.Year),
 			LeagueTable:             standings,
