@@ -1,7 +1,22 @@
 * Go + Templ + Htmx + Gin + Sqlc
 
+* Run
+```
+    go run main.go
+```
+
+* Develop
+
+First install these tools:
+- air
+- templ
+- sqlc
+
+```
+    air -c .air.toml
+```
+
 * TODOs:
 - better prediction
 - team budgets to prediction
 - postgresql/mysql 
-- publish on github.io
