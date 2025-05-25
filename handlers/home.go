@@ -158,27 +158,31 @@ func handleHome(repo repository.Repository) gin.HandlerFunc {
 		}
 
 		// Calculate championship predictions
-		var predictions []templates.TeamPrediction
-		totalStrength := 0
-		for _, ts := range leagueTable {
-			totalStrength += int(ts.Team.Strength.Int64)
+		predictions, err := calculateChampionshipPredictions(reqCtx, repo, currentSeason)
+		if err != nil {
+			log.Printf("Failed to calculate predictions: %v", err)
+			predictions = []TeamPrediction{} // Use empty predictions if calculation fails
 		}
 
-		for _, ts := range leagueTable {
-			probability := float64(ts.Team.Strength.Int64+ts.Standing.Points.Int64) / float64(totalStrength)
-			predictions = append(predictions, templates.TeamPrediction{
-				TeamName:    ts.Team.Name,
-				Probability: probability,
+		// Convert predictions to template format
+		var templatePredictions []templates.TeamPrediction
+		for _, pred := range predictions {
+			templatePredictions = append(templatePredictions, templates.TeamPrediction{
+				TeamName:    pred.TeamName,
+				Probability: pred.Probability,
 			})
 		}
 
-		sort.Slice(predictions, func(i, j int) bool {
-			return predictions[i].Probability > predictions[j].Probability
-		})
-
 		// Check if season is complete
 		totalWeeks := 2 * (len(teams) - 1)
-		isSeasonComplete := currentWeek >= totalWeeks
+
+		// Get all unplayed matches for the season
+		unplayedMatchesForSeason, err := repo.GetUnplayedMatchesByWeek(reqCtx, int64(totalWeeks), currentSeason.ID)
+		if err != nil && err != sql.ErrNoRows {
+			log.Printf("Failed to check for unplayed matches: %v", err)
+		}
+
+		isSeasonComplete := currentWeek >= totalWeeks && (err == sql.ErrNoRows || len(unplayedMatchesForSeason) == 0)
 
 		if isSeasonComplete {
 			err = repo.CompleteSeason(reqCtx, currentSeason.ID)
@@ -192,7 +196,7 @@ func handleHome(repo repository.Repository) gin.HandlerFunc {
 			CurrentYear:             int(currentSeason.Year),
 			LeagueTable:             leagueTable,
 			MatchResults:            matchResults,
-			ChampionshipPredictions: predictions,
+			ChampionshipPredictions: templatePredictions,
 			Fixtures:                fixtures,
 			IsSeasonComplete:        isSeasonComplete,
 		}

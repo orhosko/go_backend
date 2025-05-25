@@ -142,7 +142,7 @@ func handleGetStandings(repo repository.Repository) gin.HandlerFunc {
 
 		// Check if season is complete
 		totalWeeks := 2 * (len(teams) - 1)
-		isSeasonComplete := currentWeek >= totalWeeks && len(fixtures) == 0
+		isSeasonComplete := currentWeek >= totalWeeks
 
 		component := templates.Index(templates.StandingsPageData{
 			CurrentWeek:             currentWeek,

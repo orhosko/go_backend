@@ -366,7 +366,23 @@ body {
 /* Responsive Design Updates */
 @media (max-width: 768px) {
 	.container {
+		margin: 10px;
 		padding: 15px;
+	}
+
+	.navbar {
+		padding: 0.5rem;
+	}
+
+	.nav-links {
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.nav-link {
+		width: 100%;
+		text-align: center;
 	}
 
 	.page-header {
@@ -413,5 +429,15 @@ body {
 
 	.controls {
 		flex-direction: column;
+	}
+
+	.navigation {
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	.nav-button {
+		width: 100%;
+		text-align: center;
 	}
 } 

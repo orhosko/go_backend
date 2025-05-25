@@ -1,4 +1,6 @@
-* Go + Templ + Htmx + Gin + Sqlc
+* Go + Templ + Gin + Sqlc
+
+[[./docs/main.png]]]
 
 * Run
 

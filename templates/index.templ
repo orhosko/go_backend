@@ -76,13 +76,15 @@ templ Index(data StandingsPageData) {
 									<button type="submit" class="btn btn-primary">Simulate Week { fmt.Sprintf("%d", data.CurrentWeek) }</button>
 								}
 							</form>
-							<form method="POST" action="/next-week" class="control-form">
-								if len(data.Fixtures) > len(data.MatchResults) {
+							if len(data.Fixtures) > len(data.MatchResults) {
+								<form method="POST" action="/next-week" class="control-form">
 									<button type="submit" class="btn btn-secondary" disabled>Next Week</button>
-								} else {
+								</form>
+							} else if !data.IsSeasonComplete {
+								<form method="POST" action="/next-week" class="control-form">
 									<button type="submit" class="btn btn-secondary">Next Week</button>
-								}
-							</form>
+								</form>
+							}
 							<form method="POST" action="/play-all" class="control-form">
 								if len(data.Fixtures) == 0 {
 									<button type="submit" class="btn btn-success" disabled>Play All Remaining Matches</button>
