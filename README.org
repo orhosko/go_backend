@@ -27,5 +27,4 @@ air -c .air.toml
 #+end_src
 
 * TODOs:
-- better prediction
 - port to postgresql/mysql and deploy

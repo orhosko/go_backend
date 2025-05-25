@@ -89,13 +89,11 @@ func calculateChampionshipPredictions(ctx context.Context, repo Repository, curr
 		}
 
 		// Calculate team strength based on budget and current standing
-		budgetStrength := float64(team.Budget.Int64) / 1000000.0 // Normalize budget
-		standingStrength := 0.0
-		if currentWeek == 0 {
-			standingStrength = 0.5
-		} else {
-			standingStrength = float64(standing.Points.Int64) / float64(currentWeek*3) // Points per available match
-		}
+		budgetStrength := float64(team.Budget.Int64) / 1_000_000_000.0 // Normalize budget
+		// fmt.Println("budgetStrength", budgetStrength)
+
+		standingStrength := float64(standing.Points.Int64) / float64(currentWeek*3) // Points per available match
+		// fmt.Println("standingStrength", standingStrength)
 		teamStrength := (budgetStrength + standingStrength) / 2.0
 
 		// Calculate average opponent strength for remaining matches
@@ -121,14 +119,14 @@ func calculateChampionshipPredictions(ctx context.Context, repo Repository, curr
 			}
 
 			// Calculate opponent strength
-			opponentBudgetStrength := float64(opponent.Budget.Int64) / 1000000.0
+			opponentBudgetStrength := float64(opponent.Budget.Int64) / 1_000_000_000.0
 			opponentStandingStrength := float64(opponentStanding.Points.Int64) / float64(currentWeek*3)
 			totalOpponentStrength += (opponentBudgetStrength + opponentStandingStrength) / 2.0
 		}
-		// averageOpponentStrength := totalOpponentStrength / float64(len(teams))
+		averageOpponentStrength := totalOpponentStrength / float64(len(remainingMatches))
 
 		// Calculate base probability
-		probability := teamStrength //* (1.0 + (teamStrength - averageOpponentStrength))
+		probability := teamStrength * (1.0 + (teamStrength - averageOpponentStrength))
 
 		// Calculate points gap to leader
 		pointsGap := float64(maxCurrentPoints - standing.Points.Int64)
@@ -140,11 +138,11 @@ func calculateChampionshipPredictions(ctx context.Context, repo Repository, curr
 		// Late season: More weight to current points and remaining matches
 		if seasonProgress < 0.3 { // First 30% of season
 			// Early season: Focus on team strength, keep probabilities close
-			probability = 0.3 + (probability * 0.4) // Base 30% chance + up to 40% more
+			probability = 0.2 + (probability * 0.5) // Base 20% chance + up to 50% more
 		} else if seasonProgress < 0.7 { // Middle 40% of season
 			// Mid season: Points start to matter more
 			pointsFactor := math.Max(0, 1.0-(pointsGap/float64(currentWeek*3)))
-			probability *= (0.6 + (0.4 * pointsFactor))
+			probability *= (0.7 + (0.3 * pointsFactor))
 		} else { // Last 30% of season
 			// Late season: Points gap and remaining matches are crucial
 			maxPossibleGain := float64(len(remainingMatches) * 3)
@@ -160,6 +158,9 @@ func calculateChampionshipPredictions(ctx context.Context, repo Repository, curr
 				probability = math.Pow(probability, float64(3-remainingWeeks))
 			}
 		}
+
+		// Normalize probability to be between 0 and 1
+		probability = math.Max(0.0, math.Min(1.0, probability))
 
 		teamPredictions = append(teamPredictions, TeamPrediction{
 			TeamName:    team.Name,
