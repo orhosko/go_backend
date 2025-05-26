@@ -29,9 +29,9 @@ func main() {
 
 	// Ensure the schema is created for SQLite in development
 	// In production, use migrations
-	if err := dbConn.EnsureSchema("sqlc/schema.sql"); err != nil {
-		log.Fatalf("Error ensuring database schema: %v", err)
-	}
+	// if err := dbConn.EnsureSchema("sqlc/schema.sql"); err != nil {
+	// 	log.Fatalf("Error ensuring database schema: %v", err)
+	// }
 
 	// Initialize repositories
 	repo := repository.NewSQLCRepository(dbConn.Queries, dbConn.Conn)
