@@ -25,7 +25,8 @@ func LoadConfig() (*Config, error) {
 	}
 
 	if cfg.DatabaseURL == "" {
-		return nil, &ConfigError{Message: "DATABASE_URL environment variable is not set"}
+		cfg.ServerPort = ":memory:"
+		// return nil, &ConfigError{Message: "DATABASE_URL environment variable is not set"}
 	}
 	if cfg.ServerPort == "" {
 		cfg.ServerPort = "8080" // Default port
